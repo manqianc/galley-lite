@@ -1,6 +1,6 @@
 {
   "name": "galley-lite",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Point at any local HTML and reconnect to the Claude Code session that built it. Claude edits the file in place and live-reloads. Bring your own Anthropic API key. Local, private, zero-dependency.",
   "type": "module",
   "bin": {
@@ -8,6 +8,7 @@
   },
   "files": [
     "galley-lite.mjs",
+    "galley-lite.test.mjs",
     "examples/sample.html",
     "README.md",
     "CHANGELOG.md",
@@ -17,7 +18,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node galley-lite.mjs"
+    "start": "node galley-lite.mjs",
+    "test": "node --test galley-lite.test.mjs && node test/change.test.mjs"
   },
   "keywords": [
     "claude",

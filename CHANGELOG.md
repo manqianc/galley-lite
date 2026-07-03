@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.3 — 2026-07-03
+
+UI polish + turn queue for batch edits.
+
+- **Turn queue.** Send multiple messages while Claude is busy; inspect, reorder (↑/↓), or
+  cancel pending items in the "next up →" list. Serialized execution, SSE-synced across tabs.
+- **Badge scroll fix.** Comment pins use document-relative positioning — no more lag/jump on scroll.
+- **Panel layout fix.** Content shift uses the CSS panel width instead of measuring before paint.
+- **Empty reply cleanup.** Edit-only turns no longer leave blank assistant bubbles in the thread.
+- **Tests.** Queue integration tests (`galley-lite.test.mjs`) + fixed change-computation test.
+
 ## 0.2.2 — 2026-06-29
 
 Docs: the README now leads with the point-to-edit demo (the actual differentiator) instead of the chat-box clip, via an absolute image URL that renders on both GitHub and npm, plus a link to the full feature tour. No code changes.

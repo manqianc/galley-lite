@@ -335,6 +335,7 @@ class ClaudeAgent {
     this.onEvent = null;
   }
   start() {
+    if (process.env.GALLEY_MOCK_AGENT) return;
     if (this.child && !this.child.killed) return;
     const args = [
       "-p",
@@ -430,6 +431,10 @@ class ClaudeAgent {
   }
   // One turn. Resolves { ok, reply }. Never rejects (errors come back as a reply).
   send(text, onEvent) {
+    if (process.env.GALLEY_MOCK_AGENT) {
+      const ms = +(process.env.GALLEY_MOCK_AGENT) || 100;
+      return new Promise((resolve) => setTimeout(() => resolve({ ok: true, reply: `[mock] ${text.slice(0, 60)}` }), ms));
+    }
     return new Promise((resolve) => {
       this.start();
       if (!this.child) return resolve({ ok: false, reply: "Could not start claude. Is Claude Code installed + logged in?" });
@@ -633,20 +638,34 @@ function computeChange(before, after, edits) {
   return { kind: "edit", contentChanged: true, fragments, byteDelta };
 }
 
-// FIFO turn queue: every /send runs through this chain, so concurrent senders
-// (multiple tabs, a tunnel guest) line up and execute one at a time instead of
-// racing the shared thread / editing flag / undo stack / single warm agent.
-let turnChain = Promise.resolve();
-let queueDepth = 0;
-function enqueueTurn(fn) {
-  queueDepth++;
-  logEvent("turn_queued", { depth: queueDepth });
-  if (queueDepth > 1) broadcast({ type: "activity", kind: "tool", text: `queued — ${queueDepth - 1} turn(s) ahead` });
-  const run = turnChain.then(fn, fn);
-  turnChain = run.catch(() => {});
-  return run.finally(() => {
-    queueDepth--;
+// Explicit turn queue: items are inspectable/reorderable/cancellable.
+// addToQueue() enqueues and returns the id synchronously; results come back via SSE.
+const pendingQueue = []; // { id, comments, message, userText }
+let queueRunning = false;
+
+function broadcastQueue() {
+  broadcast({ type: "queue", items: pendingQueue.map((q, i) => ({ id: q.id, text: q.userText, position: i })) });
+}
+
+function drainQueue() {
+  if (queueRunning || !pendingQueue.length) return;
+  queueRunning = true;
+  const item = pendingQueue.shift();
+  broadcastQueue();
+  logEvent("turn_dequeued", { id: item.id, remaining: pendingQueue.length });
+  runTurn(item.comments, item.message, item.userText).finally(() => {
+    queueRunning = false;
+    drainQueue();
   });
+}
+
+function addToQueue(comments, message, userText) {
+  const id = randomUUID().slice(0, 8);
+  pendingQueue.push({ id, comments, message, userText });
+  logEvent("turn_queued", { id, depth: pendingQueue.length, running: queueRunning });
+  broadcastQueue();
+  drainQueue();
+  return id;
 }
 
 // One serialized conversational turn. Pushes the user turn, runs the agent (with
@@ -688,9 +707,9 @@ async function runTurn(comments, message, userText) {
   } finally {
     editing = false;
   }
-  thread.push({ role: "assistant", text: out.reply });
+  if (out.reply && out.reply.trim()) thread.push({ role: "assistant", text: out.reply });
   while (thread.length > 400) thread.shift(); // bound memory + /thread payload
-  broadcast({ type: "turn-end", reply: out.reply });
+  broadcast({ type: "turn-end", reply: out.reply || "" });
   process.stdout.write(`\x1b[1m\x1b[38;5;79m‹ claude\x1b[0m\n${out.reply}\n`);
 
   // Faithful "what changed" readout: compare before/after CONTENT (not mtime — a
@@ -743,7 +762,7 @@ const OVERLAY = /* html */ `
   #gl-pop .gl-row{display:flex;gap:8px;justify-content:flex-end;padding:8px 10px;border-top:1px solid #e3dccd}
   #gl-pop button{font:inherit;border-radius:8px;padding:6px 11px;cursor:pointer;border:1px solid #d8d1c4;background:#fff}
   #gl-pop button.gl-go{background:#c4623f;color:#fff;border-color:#c4623f}
-  #gl-panel{position:fixed;top:0;right:0;bottom:0;width:340px;z-index:2147483646;background:#1b1a18;color:#f2ede3;
+  #gl-panel{--gl-panel-width:340px;position:fixed;top:0;right:0;bottom:0;width:var(--gl-panel-width);z-index:2147483646;background:#1b1a18;color:#f2ede3;
     font:13px/1.45 ui-sans-serif,system-ui,sans-serif;box-shadow:-8px 0 30px rgba(0,0,0,.25);border-left:1px solid #3a3733;
     transform:translateX(100%);transition:transform .36s cubic-bezier(.32,.72,0,1);display:flex;flex-direction:column}
   #gl-panel.gl-show{transform:none}
@@ -772,7 +791,7 @@ const OVERLAY = /* html */ `
   #gl-input:focus{outline:0;border-color:#c4623f}
   #gl-send{border:0;border-radius:10px;background:#c4623f;color:#fff;font:inherit;font-weight:600;padding:0 14px;cursor:pointer}
   #gl-send[disabled]{opacity:.4;cursor:default}
-  .gl-badge{position:fixed;z-index:2147483645;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#c4623f;color:#fff;animation:gl-pop .24s cubic-bezier(.23,1,.32,1);
+  .gl-badge{position:absolute;z-index:2147483645;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#c4623f;color:#fff;animation:gl-pop .24s cubic-bezier(.23,1,.32,1);
     font:11px/18px ui-sans-serif,system-ui,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.3);pointer-events:none}
   /* markdown inside assistant bubbles */
   .gl-asst p{margin:.3rem 0} .gl-asst p:first-child{margin-top:0} .gl-asst p:last-child{margin-bottom:0}
@@ -823,6 +842,13 @@ const OVERLAY = /* html */ `
   .gl-appr-r .gl-app{background:#69b58a;color:#11281c;font-weight:600}
   .gl-appr-r .gl-rej{background:#3a2723;color:#ffd9cd;border:1px solid #6a4a42}
   .gl-guestbar{margin:8px 10px 0;padding:7px 10px;border-radius:9px;background:#23303a;border:1px solid #2d4754;color:#bcd2dd;font-size:11.5px;line-height:1.4}
+  #gl-queue{padding:0 10px 4px;display:flex;flex-direction:column;gap:4px}
+  .gl-qi{display:flex;align-items:center;gap:6px;background:#1e1c19;border:1px solid #3a3733;border-radius:8px;padding:5px 8px;font-size:11.5px;color:#c8c0b4}
+  .gl-qi .gl-qi-n{color:#9a948a;font-weight:600;flex:none}
+  .gl-qi .gl-qi-t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gl-qi-lbl{color:#8f897e;font-size:10.5px;padding:2px 0 4px}
+  .gl-qi button{background:none;border:0;color:#6a6258;cursor:pointer;font-size:12px;padding:0 2px;line-height:1}
+  .gl-qi button:hover{color:#f2ede3}
 </style>
 <div id="gl-bar">
   <span class="gl-dot"></span>
@@ -836,6 +862,7 @@ const OVERLAY = /* html */ `
 <div id="gl-panel">
   <header><b>Conversation</b><button class="gl-x" id="gl-close">×</button></header>
   <div id="gl-thread"></div>
+  <div id="gl-queue"></div>
   <div id="gl-pending"></div>
   <div id="gl-compose">
     <textarea id="gl-input" rows="1" placeholder="Message Claude…  (turn on Comment to attach elements)"></textarea>
@@ -849,14 +876,15 @@ const OVERLAY = /* html */ `
   var picking=false, pop=null, hovered=null, pending=[], nextId=1, turnActive=false, emptyShown=false;
   function byId(i){return document.getElementById(i);}
   var bar=byId('gl-bar'), toggle=byId('gl-toggle'), undo=byId('gl-undo'), statusEl=byId('gl-status'),
-      panel=byId('gl-panel'), thread=byId('gl-thread'), pendEl=byId('gl-pending'),
+      panel=byId('gl-panel'), thread=byId('gl-thread'), queueEl=byId('gl-queue'), pendEl=byId('gl-pending'),
       input=byId('gl-input'), sendBtn=byId('gl-send');
   function inUI(el){ return el && el.closest && (el.closest('#gl-bar')||el.closest('#gl-pop')||el.closest('#gl-panel')||el.closest('.gl-badge')); }
   function setStatus(t){ statusEl.textContent=t; }
   function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function clearHi(){ if(hovered){hovered.classList.remove('gl-hi'); hovered=null;} }
   // Push the document left so the panel doesn't cover content (or the comment pins).
-  function showPanel(){ panel.classList.add('gl-show'); document.documentElement.style.transition='margin-right .22s ease'; document.documentElement.style.marginRight=(panel.offsetWidth||340)+'px'; setTimeout(positionBadges,240); try{sessionStorage.setItem('gl-panel','1');}catch(e){} }
+  function panelWidth(){ return parseInt(getComputedStyle(panel).getPropertyValue('--gl-panel-width'),10)||340; }
+  function showPanel(){ panel.classList.add('gl-show'); document.documentElement.style.transition='margin-right .22s ease'; document.documentElement.style.marginRight=panelWidth()+'px'; setTimeout(positionBadges,240); try{sessionStorage.setItem('gl-panel','1');}catch(e){} }
   function hidePanel(){ panel.classList.remove('gl-show'); document.documentElement.style.marginRight=''; setTimeout(positionBadges,240); try{sessionStorage.removeItem('gl-panel');}catch(e){} }
   function togglePanel(){ if(panel.classList.contains('gl-show')) hidePanel(); else showPanel(); }
   function atBottom(){ return thread.scrollHeight-thread.scrollTop-thread.clientHeight < 60; }
@@ -909,12 +937,15 @@ const OVERLAY = /* html */ `
   pendEl.addEventListener('click',function(e){ var id=e.target.getAttribute&&e.target.getAttribute('data-id'); if(id) removePending(+id); });
   function removePending(id){ var c=pending.filter(function(x){return x.id===id;})[0]; if(c&&c.badge) c.badge.remove(); pending=pending.filter(function(x){return x.id!==id;}); renderPending(); refreshSend(); }
 
+  function renderQueue(items){ if(!items||!items.length){queueEl.innerHTML='';return;} var h='<div class="gl-qi-lbl">next up →</div>'; h+=items.map(function(q,i){ return '<div class="gl-qi" data-id="'+esc(q.id)+'"><span class="gl-qi-n">'+(i+1)+'</span><span class="gl-qi-t">'+esc(q.text)+'</span>'+(i>0?'<button data-mv="-1" title="move earlier">↑</button>':'')+(i<items.length-1?'<button data-mv="1" title="move later">↓</button>':'')+'<button data-cancel="1" title="cancel">×</button></div>'; }).join(''); queueEl.innerHTML=h; }
+  queueEl.addEventListener('click',function(e){ var qi=e.target.closest&&e.target.closest('.gl-qi'); if(!qi) return; var id=qi.getAttribute('data-id'); if(e.target.getAttribute('data-cancel')){ fetch('/__galley/queue/cancel',{method:'POST',headers:authHeaders({'content-type':'application/json'}),body:JSON.stringify({id:id})}).catch(function(){}); } else if(e.target.getAttribute('data-mv')){ var mv=+e.target.getAttribute('data-mv'); var all=Array.from(queueEl.querySelectorAll('.gl-qi')); var ids=all.map(function(el){return el.getAttribute('data-id');}); var idx=ids.indexOf(id); var ni=idx+mv; if(ni>=0&&ni<ids.length){ var tmp=ids[idx]; ids[idx]=ids[ni]; ids[ni]=tmp; fetch('/__galley/queue/reorder',{method:'POST',headers:authHeaders({'content-type':'application/json'}),body:JSON.stringify({ids:ids})}).catch(function(){}); } } });
+
   function makeBadge(c){ var b=document.createElement('div'); b.className='gl-badge'; b.textContent=c.id; document.body.appendChild(b); c.badge=b; positionBadges(); }
   function clearBadges(){ pending.forEach(function(c){ if(c.badge) c.badge.remove(); }); }
   function positionBadges(){ pending.forEach(function(c){ if(!c.badge||!c.el) return; var r=c.el.getBoundingClientRect();
     if(r.width===0&&r.height===0){ c.badge.style.display='none'; return; } c.badge.style.display='block';
-    c.badge.style.left=Math.max(2,r.left-6)+'px'; c.badge.style.top=Math.max(2,r.top-6)+'px'; }); }
-  window.addEventListener('scroll',positionBadges,true); window.addEventListener('resize',positionBadges);
+    c.badge.style.left=Math.max(2,r.left+window.scrollX-6)+'px'; c.badge.style.top=Math.max(2,r.top+window.scrollY-6)+'px'; }); }
+  window.addEventListener('resize',positionBadges);
 
   // tiny, safe markdown → HTML (escape first, then a handful of inline + block rules)
   function md(src){
@@ -964,10 +995,12 @@ const OVERLAY = /* html */ `
   function onToken(t){ killWarm(); if(!live){ var b=atBottom(); live=document.createElement('div'); live.className='gl-bubble gl-asst gl-caret'; thread.appendChild(live); if(b) scroll(); }
     liveText+=t; if(!renderQueued){ renderQueued=true; requestAnimationFrame(function(){ renderQueued=false; var b=atBottom(); renderLive(); if(b) scroll(); }); } }
   function endTurn(reply){ killWarm(); clearActivity();
-    if(live){ live.classList.remove('gl-caret'); live.innerHTML=md(reply); live=null; } else if(reply){ bubble('assistant', reply); }
+    var hasReply=reply&&String(reply).trim();
+    if(live){ live.classList.remove('gl-caret'); if(hasReply) live.innerHTML=md(reply); else live.remove(); live=null; }
+    else if(hasReply){ bubble('assistant', reply); }
     liveText=''; setBusyUI(false); setStatus('✓'); }
 
-  function refreshSend(){ sendBtn.disabled = turnActive || (!pending.length && !input.value.trim()); }
+  function refreshSend(){ sendBtn.disabled = !pending.length && !input.value.trim(); }
   input.addEventListener('input',function(){ input.style.height='auto'; input.style.height=Math.min(130,input.scrollHeight)+'px'; refreshSend(); });
   input.addEventListener('keydown',function(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } });
   sendBtn.onclick=send;
@@ -979,7 +1012,7 @@ const OVERLAY = /* html */ `
 
   function send(){
     var msg=input.value.trim();
-    if(turnActive || (!pending.length && !msg)) return;
+    if(!pending.length && !msg) return;
     var batch=pending.slice();
     // The "what changed" readout no longer flashes what you POINTED AT — it flashes
     // what the agent actually CHANGED, fetched by changeId after the reload (below).
@@ -1005,7 +1038,7 @@ const OVERLAY = /* html */ `
     fetch('/__galley/thread'+KQ).then(function(r){return r.json();}).then(function(d){
       thread.innerHTML=''; emptyShown=false; live=null; liveText='';
       if(!d.thread||!d.thread.length){ thread.innerHTML='<div class="gl-empty">Ask Claude about this document, or turn on 💬 Comment to point at something.</div>'; emptyShown=true; }
-      else d.thread.forEach(function(t){ bubble(t.role, t.text); });
+      else d.thread.forEach(function(t){ if(t.text&&String(t.text).trim()) bubble(t.role, t.text); });
       scroll();
     }).catch(function(){});
   }
@@ -1092,9 +1125,11 @@ const OVERLAY = /* html */ `
     else if(d.type==='approval'){ addApproval(d.id, d.text); }
     else if(d.type==='approval-clear'){ clearApproval(d.id); }
     else if(d.type==='presence'){ setPresence(d.hosts, d.guests); }
+    else if(d.type==='queue'){ renderQueue(d.items); }
   }catch(e){} };
 
   loadThread();
+  fetch('/__galley/queue').then(function(r){return r.json();}).then(function(d){renderQueue(d.items||[]);}).catch(function(){});
   try{ if(sessionStorage.getItem('gl-panel')) showPanel(); }catch(e){} // keep the panel open across edit-reloads
 })();
 </script>
@@ -1256,11 +1291,11 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify({ ok: true, pending: true, reply: "waiting for the host to approve…" }));
       return;
     }
-    // host
-    logEvent("turn_sent", { source: comments.length ? "comment" : "chat", comments_n: comments.length, text_len: userText.length, queue_depth: queueDepth });
-    const out = await enqueueTurn(() => runTurn(comments, message, userText));
+    // host — enqueue and respond immediately; turn result arrives via SSE
+    logEvent("turn_sent", { source: comments.length ? "comment" : "chat", comments_n: comments.length, text_len: userText.length, queue_depth: pendingQueue.length });
+    const qid = addToQueue(comments, message, userText);
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify(out));
+    res.end(JSON.stringify({ ok: true, queued: true, id: qid }));
     return;
   }
 
@@ -1299,6 +1334,40 @@ const server = createServer(async (req, res) => {
     logEvent("undo", { ok });
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ ok }));
+    return;
+  }
+
+  // Queue endpoints — inspect (canRead), reorder/cancel (host only).
+  if (path === "/__galley/queue" && req.method === "GET") {
+    if (!canRead) { res.writeHead(403); res.end(); return; }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ items: pendingQueue.map((q, i) => ({ id: q.id, text: q.userText, position: i })), running: queueRunning }));
+    return;
+  }
+
+  if (path === "/__galley/queue/reorder" && req.method === "POST") {
+    if (role !== "host") { res.writeHead(403); res.end(JSON.stringify({ ok: false, reply: "host only" })); return; }
+    const { ids } = safeJson(await readBody(req));
+    if (!Array.isArray(ids)) { res.writeHead(400); res.end(JSON.stringify({ ok: false })); return; }
+    const qmap = new Map(pendingQueue.map((q) => [q.id, q]));
+    const reordered = ids.map((id) => qmap.get(id)).filter(Boolean);
+    const rest = pendingQueue.filter((q) => !ids.includes(q.id));
+    pendingQueue.length = 0;
+    pendingQueue.push(...reordered, ...rest);
+    broadcastQueue();
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  if (path === "/__galley/queue/cancel" && req.method === "POST") {
+    if (role !== "host") { res.writeHead(403); res.end(JSON.stringify({ ok: false, reply: "host only" })); return; }
+    const { id } = safeJson(await readBody(req));
+    const idx = pendingQueue.findIndex((q) => q.id === id);
+    if (idx >= 0) pendingQueue.splice(idx, 1);
+    broadcastQueue();
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: idx >= 0 }));
     return;
   }
 

@@ -1,6 +1,13 @@
 node_modules/
 *.log
 .DS_Store
+.Rhistory
 .galley-lite-audit.jsonl
 *.tgz
 .playwright-mcp/
+
+# Large promo GIFs — keep in ~/Documents/personal/galley-lite/promos/ for social posts.
+# Repo keeps small hero GIFs (promo-feature.gif) and MP4s for README raw URLs.
+docs/promo-showcase.gif
+docs/promo-dogfood.gif
+docs/promo-features.gif

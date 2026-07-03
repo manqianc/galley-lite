@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "..", "galley-lite.mjs"), "utf8");
 const start = src.indexOf("let changeSeq = 0;");
-const end = src.indexOf("// FIFO turn queue");
+const end = src.indexOf("// Explicit turn queue");
 if (start < 0 || end < 0) throw new Error("could not locate change-tracking block in source");
 const block = src.slice(start, end);
 const { computeChange, classifyFragment } = new Function(block + "\nreturn { computeChange, classifyFragment };")();

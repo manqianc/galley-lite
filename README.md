@@ -6,11 +6,15 @@ galley-lite is not an HTML editor. It's a visual way to work with the agent that
 
 ![galley-lite: point at any element and Claude edits the real file](https://raw.githubusercontent.com/maggiemchen/galley-lite/main/docs/promo-feature.gif)
 
+▶ **[Watch the feature showcase (58s)](https://github.com/maggiemchen/galley-lite/raw/main/docs/promo-showcase.mp4)** — six clear steps: point → edit → chat → batch → what changed → queue → `npx galley-lite`
+
 Turn on Comment, point at **any** element — the headline, a button, a paragraph — and galley-lite auto-detects it (shown as its tag, e.g. `<h1#headline>`). Say what you want, and it edits the real file in place:
 
 ![How it works: point at any element, it detects it, then edits the file](https://raw.githubusercontent.com/maggiemchen/galley-lite/main/docs/feature-examples.png)
 
-▶ **[Watch the full feature tour (41s)](https://github.com/maggiemchen/galley-lite/raw/main/docs/promo-features.mp4)** — batch comments, the "what changed" stepper, undo, session-resume.
+▶ **[Watch the full feature tour (41s)](https://github.com/maggiemchen/galley-lite/raw/main/docs/promo-features.mp4)** — extended cut with session-resume CTA.
+
+▶ **[Real dogfood session (45s)](https://github.com/maggiemchen/galley-lite/raw/main/docs/promo-dogfood.mp4)** — unscripted long-article edit with queue backlog (messier, but authentic).
 
 ### A real example: a wall of text → a visual explainer
 
@@ -23,7 +27,7 @@ Not staged — this is one actual galley edit. A plain text-only page ([`example
 ## What it does
 
 - **Reconnects to the build session.** On startup it scans `~/.claude/projects` for the Claude Code session that did a `Write`/`Edit` to this exact file, and resumes it. Edits inherit *how and why* the file was built — its sources, data, and reasoning — not just the rendered HTML.
-- **Click to comment, or just chat.** Open the page, turn on Comment, click any element to attach an anchored note, or type in the side panel. Batch several comments and send once.
+- **Click to comment, or just chat.** Open the page, turn on Comment, click any element to attach an anchored note, or type in the side panel. Batch several comments and send once — or queue multiple messages while Claude is working and reorder/cancel them in the "next up →" list.
 - **Edits the file in place + live-reloads.** A warm `claude` session edits the file on disk; the page reloads itself and flashes the elements that changed.
 - **Streams the reply.** Token-by-token, rendered as markdown, with live tool activity ("Reading report.html", "Editing report.html").
 - **Undo and Stop.** Undo reverts the last turn (50 deep). Stop kills the in-flight turn.
