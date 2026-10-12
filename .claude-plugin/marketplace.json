@@ -2,7 +2,7 @@
   "name": "galley-lite",
   "owner": {
     "name": "Maggie Chen",
-    "url": "https://github.com/maggiemchen"
+    "url": "https://github.com/manqianc"
   },
   "metadata": {
     "description": "galley-lite — comment-to-edit any local HTML with the Claude Code session that built it.",
@@ -15,7 +15,7 @@
       "description": "Open any local HTML, comment on elements or chat, and the Claude Code session that built it edits the file in place (bring your own Anthropic API key). Adds /galley and /galley-stop.",
       "version": "0.2.0",
       "author": { "name": "Maggie Chen" },
-      "homepage": "https://github.com/maggiemchen/galley-lite",
+      "homepage": "https://github.com/manqianc/galley-lite",
       "license": "MIT",
       "keywords": ["html", "editor", "claude-code", "local"]
     }

@@ -4,17 +4,17 @@ Work with the agent that built your page by pointing at the result, not by typin
 
 galley-lite is not an HTML editor. It's a visual way to work with the agent that built your page: open the file, point at any element or just talk, and it changes in place and live-reloads. Instead of reading a diff in a transcript, you watch the page update. Under the hood it reconnects to the Claude Code session that built the file, so edits inherit the intent, sources, and reasoning behind it, not just the rendered HTML. Local, private, and bring-your-own-key: set `ANTHROPIC_API_KEY` and edits run on the Anthropic API.
 
-![galley-lite: point at any element and Claude edits the real file](https://raw.githubusercontent.com/maggiemchen/galley-lite/main/docs/promo-feature.gif)
+![galley-lite: point at any element and Claude edits the real file](https://raw.githubusercontent.com/manqianc/galley-lite/main/docs/promo-feature.gif)
 
-▶ **[Watch the feature showcase (58s)](https://github.com/maggiemchen/galley-lite/raw/main/docs/promo-showcase.mp4)** — six clear steps: point → edit → chat → batch → what changed → queue → `npx galley-lite`
+▶ **[Watch the feature showcase (58s)](https://github.com/manqianc/galley-lite/raw/main/docs/promo-showcase.mp4)** — six clear steps: point → edit → chat → batch → what changed → queue → `npx galley-lite`
 
 Turn on Comment, point at **any** element — the headline, a button, a paragraph — and galley-lite auto-detects it (shown as its tag, e.g. `<h1#headline>`). Say what you want, and it edits the real file in place:
 
-![How it works: point at any element, it detects it, then edits the file](https://raw.githubusercontent.com/maggiemchen/galley-lite/main/docs/feature-examples.png)
+![How it works: point at any element, it detects it, then edits the file](https://raw.githubusercontent.com/manqianc/galley-lite/main/docs/feature-examples.png)
 
-▶ **[Watch the full feature tour (41s)](https://github.com/maggiemchen/galley-lite/raw/main/docs/promo-features.mp4)** — extended cut with session-resume CTA.
+▶ **[Watch the full feature tour (41s)](https://github.com/manqianc/galley-lite/raw/main/docs/promo-features.mp4)** — extended cut with session-resume CTA.
 
-▶ **[Real dogfood session (45s)](https://github.com/maggiemchen/galley-lite/raw/main/docs/promo-dogfood.mp4)** — unscripted long-article edit with queue backlog (messier, but authentic).
+▶ **[Real dogfood session (45s)](https://github.com/manqianc/galley-lite/raw/main/docs/promo-dogfood.mp4)** — unscripted long-article edit with queue backlog (messier, but authentic).
 
 ### A real example: a wall of text → a visual explainer
 
@@ -22,7 +22,7 @@ Not staged — this is one actual galley edit. A plain text-only page ([`example
 
 | Before | After |
 |---|---|
-| ![before: wall of text](https://raw.githubusercontent.com/maggiemchen/galley-lite/main/docs/example-before.png) | ![after: diagrams + SVG](https://raw.githubusercontent.com/maggiemchen/galley-lite/main/docs/example-after.png) |
+| ![before: wall of text](https://raw.githubusercontent.com/manqianc/galley-lite/main/docs/example-before.png) | ![after: diagrams + SVG](https://raw.githubusercontent.com/manqianc/galley-lite/main/docs/example-after.png) |
 
 ## What it does
 
@@ -51,10 +51,10 @@ npx galley-lite report.html
 npm install -g galley-lite
 
 # Homebrew
-brew install maggiemchen/galley-lite/galley-lite
+brew install manqianc/galley-lite/galley-lite
 
 # Claude Code plugin (adds /galley and /galley-stop)
-/plugin marketplace add maggiemchen/galley-lite
+/plugin marketplace add manqianc/galley-lite
 /plugin install galley-lite
 ```
 

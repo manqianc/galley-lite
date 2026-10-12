@@ -34,12 +34,12 @@
   ],
   "license": "MIT",
   "author": "Maggie Chen",
-  "homepage": "https://github.com/maggiemchen/galley-lite#readme",
+  "homepage": "https://github.com/manqianc/galley-lite#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/maggiemchen/galley-lite.git"
+    "url": "git+https://github.com/manqianc/galley-lite.git"
   },
   "bugs": {
-    "url": "https://github.com/maggiemchen/galley-lite/issues"
+    "url": "https://github.com/manqianc/galley-lite/issues"
   }
 }
